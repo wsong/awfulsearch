@@ -37,30 +37,34 @@ def get_max_page_number(thread_id):
         return 1
     return int(re.sub("[^0-9]", "", page_buttons[-1].get_text()))
 
-def page_contains_target(thread_id, page_number, target_re):
+def get_target_context(thread_id, page_number, target_re, context_chars):
     try:
         posts = get_posts(thread_id, page_number)
         if not posts:
-            return False
+            return None
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 404:
-            return False
+            return None
         raise
     compiled_re = re.compile(target_re, flags=re.IGNORECASE)
     for post_text in posts:
-        if re.search(compiled_re, post_text):
-            return True
-    return False
+        match = re.search(compiled_re, post_text)
+        if match:
+            start_pos = max(match.start() - context_chars, 0)
+            end_pos = min(match.end() + context_chars, len(post_text) - 1)
+            context = post_text[start_pos:end_pos].strip()
+            return context
+    return None
 
-def get_matching_pages(thread_id, target_re, max_workers):
+def get_matching_pages(thread_id, target_re, max_workers, context_chars):
     max_page = get_max_page_number(thread_id)
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_page_number = {executor.submit(page_contains_target, thread_id, i, target_re): i for i in range(1, max_page + 1)}
+        future_to_page_number = {executor.submit(get_target_context, thread_id, i, target_re, context_chars): i for i in range(1, max_page + 1)}
         for future in concurrent.futures.as_completed(future_to_page_number):
             page_number = future_to_page_number[future]
             result = future.result()
             if result:
-                yield page_number
+                yield page_number, result
         return matches
 
 if __name__ == "__main__":
@@ -69,12 +73,13 @@ if __name__ == "__main__":
     parser.add_argument("--thread-id", type=int, required=True, help="The thread ID.")
     parser.add_argument("--target", type=str, required=True, help="The string or regex to search for.")
     parser.add_argument("--max-workers", type=int, default=10, help="The number of threads with which to make requests.")
+    parser.add_argument("--context", type=int, default=50, help="The number of characters to show around a successfully matched string.")
 
     args = parser.parse_args()
 
     matches = []
-    for page_number in get_matching_pages(args.thread_id, args.target, args.max_workers):
+    for page_number, context in get_matching_pages(args.thread_id, args.target, args.max_workers, args.context):
         matches.append(page_number)
-        print("Matched on page %d" % page_number)
+        print("Matched on page %d: %s" % (page_number, context))
+		print("-" * 50)
     print("Matched on pages %s" % matches)
-
