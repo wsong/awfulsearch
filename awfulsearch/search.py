@@ -16,7 +16,7 @@ bbuserid=<bbuserid cookie value>; bbpassword=<bbpassword cookie value>;
 
 def get_page_contents(thread_id, page_number):
     url_parts = list(urllib.parse.urlparse(
-            "http://forums.somethingawful.com/showthread.php"))
+            "https://forums.somethingawful.com/showthread.php"))
     url_parts[4] = urllib.parse.urlencode(
         [("threadid", str(thread_id)), ("pagenumber", str(page_number))])
     resp = requests.get(urllib.parse.urlunparse(url_parts), headers={"Cookie": COOKIES_STRING.strip()})
@@ -82,4 +82,5 @@ if __name__ == "__main__":
         matches.append(page_number)
         print("Matched on page %d: %s" % (page_number, context))
 		print("-" * 50)
+    matches.sort()
     print("Matched on pages %s" % matches)
