@@ -56,10 +56,10 @@ def get_target_context(thread_id, page_number, target_re, context_chars):
             return context
     return None
 
-def get_matching_pages(thread_id, target_re, max_workers, context_chars):
+def get_matching_pages(thread_id, target_re, start_page, max_workers, context_chars):
     max_page = get_max_page_number(thread_id)
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_page_number = {executor.submit(get_target_context, thread_id, i, target_re, context_chars): i for i in range(1, max_page + 1)}
+        future_to_page_number = {executor.submit(get_target_context, thread_id, i, target_re, context_chars): i for i in range(start_page, max_page + 1)}
         for future in concurrent.futures.as_completed(future_to_page_number):
             page_number = future_to_page_number[future]
             result = future.result()
@@ -74,13 +74,17 @@ if __name__ == "__main__":
     parser.add_argument("--target", type=str, required=True, help="The string or regex to search for.")
     parser.add_argument("--max-workers", type=int, default=10, help="The number of threads with which to make requests.")
     parser.add_argument("--context", type=int, default=50, help="The number of characters to show around a successfully matched string.")
+    parser.add_argument("--start-page", type=int, default=1, help="The page on which to begin searching.")
 
     args = parser.parse_args()
 
     matches = []
-    for page_number, context in get_matching_pages(args.thread_id, args.target, args.max_workers, args.context):
+    for page_number, context in get_matching_pages(args.thread_id, args.target, args.start_page, args.max_workers, args.context):
+        try:
+            print("Matched on page %d: %s" % (page_number, context))
+        except UnicodeEncodeError:
+            print("Matched on page %d" % (page_number,))
         matches.append(page_number)
-        print("Matched on page %d: %s" % (page_number, context))
-		print("-" * 50)
+        print("-" * 50)
     matches.sort()
     print("Matched on pages %s" % matches)
